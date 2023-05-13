@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -21,11 +22,10 @@ func init() {
 	flag.StringVar(&staticDir, "dir", "./www", "static files directory")
 }
 
-type Myhttpd struct {
-}
+func ServeStaticDir(w http.ResponseWriter, r *http.Request) {
+	path := r.URL.Path
+	fulldir := staticDir + path
 
-func (router *Myhttpd) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	fulldir := staticDir + r.URL.Path
 	info, err := os.Stat(fulldir)
 	if err != nil {
 		w.Write([]byte("<h1>404 not found</h1>"))
@@ -35,8 +35,8 @@ func (router *Myhttpd) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.FileServer(http.Dir(staticDir)).ServeHTTP(w, r)
 		return
 	}
-	//if r.URL.Path[1:] == "" || info.IsDir()
-	path := r.URL.Path
+
+	// Here the path is surely a directory
 	if !strings.HasSuffix(path, "/") {
 		path += "/"
 	}
@@ -44,36 +44,36 @@ func (router *Myhttpd) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		panic(err)
 	}
-	w.Write([]byte("<h1>Content of " + path + "</h1><hr>"))
+	w.Write([]byte(fmt.Sprintf("<h1>Content of %s</h1><hr>", path)))
 	if path != "/" {
 		back := strings.Split(path, "/")
 		bs := strings.Join(back[:(len(back)-2)], "/")
 		if !strings.HasPrefix(bs, "/") {
 			bs = "/" + bs
 		}
-		w.Write([]byte("<a href=\"" + bs + "\">< back</a><br><br>"))
+		w.Write([]byte(fmt.Sprintf("<a href=\"%s\">< back</a><br><br>", bs)))
 	}
 	for _, v := range dir {
 		if v.IsDir() {
-			w.Write([]byte("<a href=\"" + path + v.Name() + "\">" + v.Name() + "/</a><br>"))
+			w.Write([]byte(fmt.Sprintf("<a href=\"%s%s\">%s/</a><br>", path, v.Name(), v.Name())))
 			continue
 		}
-		w.Write([]byte("<a href=\"" + path + v.Name() + "\">" + v.Name() + "</a><br>"))
+		w.Write([]byte(fmt.Sprintf("<a href=\"%s%s\">%s</a><br>", path, v.Name(), v.Name())))
 	}
 }
 
 func main() {
 	flag.Parse()
 
-	mux := &Myhttpd{}
 	serv := &http.Server{
 		Addr:    addr,
-		Handler: mux,
+		Handler: http.HandlerFunc(ServeStaticDir),
 	}
 	d, err := os.Stat(staticDir)
 	if err != nil || !d.IsDir() {
 		os.Mkdir(staticDir, os.ModePerm)
 	}
+
 	log.Println("server started")
 	go serv.ListenAndServe()
 	out := make(chan os.Signal, 1)
